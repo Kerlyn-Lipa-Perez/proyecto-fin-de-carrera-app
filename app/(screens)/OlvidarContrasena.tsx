@@ -1,21 +1,31 @@
 import { useState } from "react";
-import { useForm, Controller } from 'react-hook-form'
-import { Link, router } from 'expo-router'
+import { useForm, Controller } from 'react-hook-form';
+import { Link, router } from 'expo-router';
 import { z } from 'zod';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, ScrollView, KeyboardAvoidingView } from 'react-native'
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Alert
+} from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
-import { zodResolver } from '@hookform/resolvers/zod'
+import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from "@/lib/supabase";
 
 // Esquema de validación con Zod
-const SigninSchema = z.object({
+const ForgotPasswordSchema = z.object({
     email: z.string().email("Correo electrónico inválido"),
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
-type SignInForm = z.infer<typeof SigninSchema>;
+type ForgotPasswordForm = z.infer<typeof ForgotPasswordSchema>;
 
-export default function Signin() {
+export default function ForgotPassword() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -23,24 +33,36 @@ export default function Signin() {
         control,
         handleSubmit,
         formState: { errors },
-    } = useForm<SignInForm>({
-        resolver: zodResolver(SigninSchema),
+    } = useForm<ForgotPasswordForm>({
+        resolver: zodResolver(ForgotPasswordSchema),
     });
 
-    const onSubmit = async (data: SignInForm) => {
+    const onSubmit = async (data: ForgotPasswordForm) => {
         try {
             setLoading(true);
             setError(null);
 
-            // Iniciar sesión en Supabase
-            const { error: loginError } = await supabase.auth.signInWithPassword({
-                email: data.email,
-                password: data.password,
-            });
+            // Enviar email de recuperación con Supabase
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+                data.email,
+                {
+                    redirectTo: 'your-app://reset-password', // Configura tu deep link
+                }
+            );
 
-            if (loginError) throw loginError;
+            if (resetError) throw resetError;
 
-            // AuthProvider will handle navigation automatically
+            // Mostrar mensaje de éxito
+            Alert.alert(
+                "Correo enviado",
+                "Revisa tu correo electrónico para restablecer tu contraseña.",
+                [
+                    {
+                        text: "OK",
+                        onPress: () => router.push("/(auth)/signin"),
+                    },
+                ]
+            );
         } catch (error) {
             setError(error instanceof Error ? error.message : String(error));
         } finally {
@@ -50,7 +72,7 @@ export default function Signin() {
 
     return (
         <KeyboardAvoidingView
-           
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.container}
         >
             <ScrollView
@@ -58,8 +80,21 @@ export default function Signin() {
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.content}>
-                    {/* Título */}
-                    <Text style={styles.title}>Iniciar Sesión</Text>
+                    {/* Botón de retroceso */}
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => router.back()}
+                    >
+                        <Ionicons name="arrow-back" size={24} color="#1F2937" />
+                    </TouchableOpacity>
+
+                    {/* Título y descripción */}
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Recuperar Contraseña</Text>
+                        <Text style={styles.subtitle}>
+                            Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
+                        </Text>
+                    </View>
 
                     {/* Campo de Email */}
                     <View style={styles.fieldContainer}>
@@ -96,44 +131,10 @@ export default function Signin() {
                         )}
                     </View>
 
-                    {/* Campo de Contraseña */}
-                    <View style={styles.fieldContainer}>
-                        <Text style={styles.label}>Contraseña</Text>
-                        <Controller
-                            control={control}
-                            name="password"
-                            render={({ field: { onChange, value } }) => (
-                                <View style={[
-                                    styles.inputContainer,
-                                    errors.password && styles.inputError
-                                ]}>
-                                    <Ionicons
-                                        name="lock-closed-outline"
-                                        size={20}
-                                        color="#9CA3AF"
-                                        style={styles.icon}
-                                    />
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder="••••••••"
-                                        placeholderTextColor="#9CA3AF"
-                                        secureTextEntry
-                                        value={value}
-                                        onChangeText={onChange}
-                                        autoComplete="password"
-                                    />
-                                </View>
-                            )}
-                        />
-                        {errors.password && (
-                            <Text style={styles.errorText}>{errors.password.message}</Text>
-                        )}
-                    </View>
-
                     {/* Error general */}
                     {error && <Text style={styles.errorText}>{error}</Text>}
 
-                    {/* Botón de iniciar sesión */}
+                    {/* Botón de enviar */}
                     <TouchableOpacity
                         style={[styles.button, loading && styles.buttonDisabled]}
                         onPress={handleSubmit(onSubmit)}
@@ -143,37 +144,22 @@ export default function Signin() {
                         {loading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text style={styles.buttonText}>Iniciar Sesión</Text>
+                            <Text style={styles.buttonText}>Enviar</Text>
                         )}
                     </TouchableOpacity>
 
-                    {/* ¿Olvidaste tu contraseña? */}
-                    <TouchableOpacity style={styles.forgotPassword}>
-                        <Text style={styles.forgotPasswordText}>
-                            
-                            <Link href="/(screens)/OlvidarContrasena" asChild>
-                                <TouchableOpacity>
-                                    <Text style={styles.link}>Olvidaste tu contraseña?</Text>
-                                </TouchableOpacity>
-                            </Link>
+                    {/* Enlace para volver al inicio de sesión */}
+                    <TouchableOpacity
+                        style={styles.backToLogin}
+                        onPress={() => router.push("/(auth)/signin")}
+                    >
+                        <Text style={styles.backToLoginText}>
+                            Volver al inicio de sesión
                         </Text>
                     </TouchableOpacity>
-
-                    {/* Enlace para registrarse */}
-                    <View style={styles.footer}>
-                        <Text style={styles.footerText}>
-                            ¿No tienes una cuenta?{" "}
-                        </Text>
-                        <Link href="/(auth)/signup" asChild>
-                            <TouchableOpacity>
-                                <Text style={styles.link}>Regístrate</Text>
-                            </TouchableOpacity>
-                        </Link>
-                    </View>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
-        
     );
 }
 
@@ -193,12 +179,26 @@ const styles = StyleSheet.create({
         width: '100%',
         alignSelf: 'center',
     },
+    backButton: {
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        marginBottom: 20,
+    },
+    header: {
+        marginBottom: 40,
+    },
     title: {
         fontSize: 28,
         fontWeight: "700",
         color: "#1F2937",
-        textAlign: "center",
-        marginBottom: 40,
+        marginBottom: 12,
+    },
+    subtitle: {
+        fontSize: 15,
+        color: "#6B7280",
+        lineHeight: 22,
     },
     fieldContainer: {
         marginBottom: 20,
@@ -260,29 +260,14 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "600",
     },
-    forgotPassword: {
-        alignItems: "center",
-        marginTop: 16,
-        paddingVertical: 8,
-    },
-    forgotPasswordText: {
-        color: "#2563EB",
-        fontSize: 14,
-        fontWeight: "500",
-    },
-    footer: {
-        flexDirection: "row",
-        justifyContent: "center",
+    backToLogin: {
         alignItems: "center",
         marginTop: 24,
+        paddingVertical: 8,
     },
-    footerText: {
-        fontSize: 14,
-        color: "#6B7280",
-    },
-    link: {
+    backToLoginText: {
         color: "#2563EB",
-        fontSize: 14,
-        fontWeight: "600",
+        fontSize: 15,
+        fontWeight: "500",
     },
 });

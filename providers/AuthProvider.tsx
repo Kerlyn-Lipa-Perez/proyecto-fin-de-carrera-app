@@ -33,7 +33,7 @@ export default function AuthProvider(props:Props){
                 setSession(data.session);
 
            }else{
-                router.replace("/signin");
+                router.replace("/(auth)/signin");
            }
            setLoading(false);
         }
@@ -44,9 +44,9 @@ export default function AuthProvider(props:Props){
             setLoading(false);
 
             if (session){
-                router.replace("/");
+                router.replace("/(screens)/HomeScreens");
             } else{
-                router.replace("/signin");
+                router.replace("/(auth)/signin");
             }
         })
 

@@ -7,26 +7,23 @@ import 'react-native-reanimated';
 
 
 export const unstable_settings = {
-  initialRouteName: 'index',
+  anchor: '(tabs)',
 };
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+
 
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{
-          headerShown: false, 
-        }}>
-          <Stack.Screen name='(auth)' />
-          <Stack.Screen name='(screens)/HomeScreens' options={{ headerShown: false }} />
+      <Stack screenOptions={{
+        headerShown: false, 
+      }}>
+        <Stack.Screen name='signin/index' options={{ headerShown: false }} />
+        <Stack.Screen name='signup/index' options={{ headerShown: false }} />
 
-          <Stack.Screen name='(screens)/OlvidarContrasena' options={{ headerShown: false }} />
-          
         </Stack>
         <StatusBar style="auto" />
-      </ThemeProvider>
+
     </AuthProvider>
   );
 }
