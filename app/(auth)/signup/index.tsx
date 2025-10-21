@@ -208,7 +208,7 @@ export default function Signup(){
             <Text style={styles.footerText}>
               ¿Ya tienes una cuenta?{" "}
             </Text>
-            <Link href="/(screens)/HomeScreens" asChild>
+            <Link href="/(auth)/signin" asChild>
               <TouchableOpacity>
                 <Text style={styles.link}>Iniciar sesión</Text>
               </TouchableOpacity>

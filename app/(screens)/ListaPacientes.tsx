@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { router } from 'expo-router';
+import { useState, useEffect, useCallback } from "react";
+import { router, useFocusEffect } from 'expo-router';
 import {
     View,
     Text,
@@ -7,31 +7,28 @@ import {
     TouchableOpacity,
     StyleSheet,
     FlatList,
-    Image,
     ActivityIndicator,
     RefreshControl,
+    Alert,
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "@/lib/supabase";
 
-interface Patient {
-    id: string;
-    nombre: string;
-    apellido: string;
-    ultima_sesion: string;
-    foto_url?: string;
-}
+import { _getAllPacientes } from "@/app/services/paciente";
+import { Paciente } from "@/app/interfaces/Paciente";
 
 export default function ListaPacientes() {
-    const [patients, setPatients] = useState<Patient[]>([]);
-    const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
+    const [patients, setPatients] = useState<Paciente[]>([]);
+    const [filteredPatients, setFilteredPatients] = useState<Paciente[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchPatients();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchPatients();
+        }, [])
+    );
 
     useEffect(() => {
         filterPatients();
@@ -40,20 +37,21 @@ export default function ListaPacientes() {
     const fetchPatients = async () => {
         try {
             setLoading(true);
+            setError(null);
+            const data = await _getAllPacientes();
 
-            // Obtener pacientes de Supabase
-            const { data, error } = await supabase
-                .from('pacientes')
-                .select('*')
-                .order('nombre', { ascending: true });
-
-            if (error) throw error;
-
-            setPatients(data || []);
-            setFilteredPatients(data || []);
-
+            if (data) {
+                setPatients(data);
+                setFilteredPatients(data);
+            } else {
+                setPatients([]);
+                setFilteredPatients([]);
+            }
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Error al cargar pacientes';
+            setError(errorMessage);
             console.error('Error al cargar pacientes:', error);
+            Alert.alert('Error', 'No se pudieron cargar los pacientes. Por favor intenta de nuevo.', [{ text: 'OK' }]);
         } finally {
             setLoading(false);
         }
@@ -70,7 +68,7 @@ export default function ListaPacientes() {
             setFilteredPatients(patients);
         } else {
             const filtered = patients.filter((patient) =>
-                `${patient.nombre} ${patient.apellido}`
+                `${patient.nombre} ${patient.apellido} ${patient.dni}`
                     .toLowerCase()
                     .includes(searchQuery.toLowerCase())
             );
@@ -78,49 +76,51 @@ export default function ListaPacientes() {
         }
     };
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
+    const calculateAge = (birthDate: string): number => {
+        const today = new Date();
+        const birth = new Date(birthDate);
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+            age--;
+        }
+        return age;
     };
 
-    const renderPatientItem = ({ item }: { item: Patient }) => (
+ 
+    const handlePatientPress = (patientId: string) => {
+        // Navegar al detalle del paciente
+        router.push(`/(screens)/PacienteDetail?id=${patientId}`);
+    };
+
+    const renderPatientItem = ({ item }: { item: Paciente }) => (
         <TouchableOpacity
             style={styles.patientCard}
-            //onPress={() => router.push(`/(screens)/PacienteDetail?id=${item.id}`)}
+            onPress={() => handlePatientPress(item.id)}
             activeOpacity={0.7}
         >
             <View style={styles.patientContent}>
-                {/* Avatar */}
                 <View style={styles.avatarContainer}>
-                    {item.foto_url ? (
-                        <Image
-                            source={{ uri: item.foto_url }}
-                            style={styles.avatar}
-                        />
-                    ) : (
-                        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                            <Text style={styles.avatarText}>
-                                {item.nombre.charAt(0)}{item.apellido.charAt(0)}
-                            </Text>
-                        </View>
-                    )}
+                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <Text style={styles.avatarText}>
+                            {item.nombre.charAt(0).toUpperCase()}
+                            {item.apellido.charAt(0).toUpperCase()}
+                        </Text>
+                    </View>
                 </View>
 
-                {/* Info */}
                 <View style={styles.patientInfo}>
                     <Text style={styles.patientName}>
-                        {item.nombre} {item.apellido.charAt(0)}.
+                        {item.nombre} {item.apellido}
                     </Text>
-                    <Text style={styles.patientSession}>
-                        Última sesión: {formatDate(item.ultima_sesion)}
-                    </Text>
+                    <View style={styles.patientDetails}>
+                        <Text style={styles.patientSession}>DNI: {item.dni}</Text>
+                        <Text style={styles.patientDivider}> • </Text>
+                        <Text style={styles.patientSession}>{calculateAge(item.fecha_nacimiento)} años</Text>
+                    </View>
                 </View>
 
-                {/* Arrow */}
                 <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
             </View>
         </TouchableOpacity>
@@ -137,16 +137,22 @@ export default function ListaPacientes() {
 
     return (
         <View style={styles.container}>
-            {/* Header */}
             <View style={styles.header}>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => router.back()}
+                >
+                    <Ionicons name="arrow-back" size={24} color="#1F2937" />
+                </TouchableOpacity>
+
                 <Text style={styles.title}>Pacientes</Text>
+
                 <TouchableOpacity
                     style={styles.newButton}
                     onPress={() => router.push("/(screens)/PacienteFormScreen")}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="add" size={20} color="#2563EB" />
-                    <Text style={styles.newButtonText}>Nuevo</Text>
+                    <Ionicons name="add" size={24} color="#2563EB" />
                 </TouchableOpacity>
             </View>
 
@@ -155,28 +161,36 @@ export default function ListaPacientes() {
                 <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
                 <TextInput
                     style={styles.searchInput}
-                    placeholder="Buscar paciente"
+                    placeholder="Buscar por nombre, apellido o DNI"
                     placeholderTextColor="#9CA3AF"
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                 />
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery("")}>
+                        <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                )}
             </View>
 
-            {/* Patients List */}
+            {/* Contador */}
+            {!loading && filteredPatients.length > 0 && (
+                <View style={styles.counterContainer}>
+                    <Text style={styles.counterText}>
+                        {filteredPatients.length} {filteredPatients.length === 1 ? 'paciente' : 'pacientes'}
+                        {searchQuery ? ' encontrado(s)' : ''}
+                    </Text>
+                </View>
+            )}
+
             {filteredPatients.length === 0 ? (
                 <View style={styles.emptyContainer}>
                     <Ionicons name="people-outline" size={64} color="#D1D5DB" />
                     <Text style={styles.emptyText}>
-                        {searchQuery ? "No se encontraron pacientes" : "No hay pacientes registrados"}
+                        {searchQuery
+                            ? "No se encontraron pacientes"
+                            : "No hay pacientes registrados"}
                     </Text>
-                    {!searchQuery && (
-                        <TouchableOpacity
-                            style={styles.emptyButton}
-                            onPress={() => router.push("/(screens)/PacienteFormScreen")}
-                        >
-                            <Text style={styles.emptyButtonText}>Agregar primer paciente</Text>
-                        </TouchableOpacity>
-                    )}
                 </View>
             ) : (
                 <FlatList
@@ -185,6 +199,7 @@ export default function ListaPacientes() {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
+                 
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
@@ -197,7 +212,6 @@ export default function ListaPacientes() {
         </View>
     );
 }
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -223,20 +237,24 @@ const styles = StyleSheet.create({
         paddingBottom: 20,
         backgroundColor: "#FFFFFF",
     },
+    backButton: {
+        width: 40,
+        height: 40,
+        justifyContent: "center",
+        alignItems: "flex-start",
+    },
     title: {
         fontSize: 28,
         fontWeight: "700",
         color: "#1F2937",
+        flex: 1,
+        textAlign: "center",
     },
     newButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-    },
-    newButtonText: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#2563EB",
+        width: 40,
+        height: 40,
+        justifyContent: "center",
+        alignItems: "flex-end",
     },
     searchContainer: {
         flexDirection: "row",
@@ -245,7 +263,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         marginHorizontal: 24,
         marginTop: 16,
-        marginBottom: 16,
+        marginBottom: 8,
         paddingHorizontal: 16,
         height: 48,
         shadowColor: "#000",
@@ -264,6 +282,15 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 16,
         color: "#1F2937",
+    },
+    counterContainer: {
+        paddingHorizontal: 24,
+        paddingVertical: 8,
+    },
+    counterText: {
+        fontSize: 14,
+        color: "#6B7280",
+        fontWeight: "500",
     },
     listContent: {
         paddingHorizontal: 24,
@@ -314,32 +341,64 @@ const styles = StyleSheet.create({
         color: "#1F2937",
         marginBottom: 4,
     },
+    patientDetails: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
     patientSession: {
         fontSize: 14,
         color: "#6B7280",
+    },
+    patientDivider: {
+        fontSize: 14,
+        color: "#D1D5DB",
     },
     emptyContainer: {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
         paddingHorizontal: 40,
+        paddingTop: 60,
     },
     emptyText: {
-        fontSize: 16,
-        color: "#6B7280",
+        fontSize: 18,
+        fontWeight: "600",
+        color: "#1F2937",
         textAlign: "center",
         marginTop: 16,
+    },
+    emptySubtext: {
+        fontSize: 14,
+        color: "#6B7280",
+        textAlign: "center",
+        marginTop: 8,
         marginBottom: 24,
     },
     emptyButton: {
+        flexDirection: "row",
+        alignItems: "center",
         backgroundColor: "#2563EB",
-        paddingVertical: 12,
+        paddingVertical: 14,
         paddingHorizontal: 24,
-        borderRadius: 8,
+        borderRadius: 12,
+        shadowColor: "#2563EB",
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    emptyButtonIcon: {
+        marginRight: 8,
     },
     emptyButtonText: {
         color: "#FFFFFF",
         fontSize: 15,
         fontWeight: "600",
     },
+    newButtonText:{
+        
+    }
 });

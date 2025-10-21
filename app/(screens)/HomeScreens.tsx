@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import {useState} from 'react';
+import { useState } from 'react';
+import { router } from 'expo-router';
 import {
     ScrollView,
     StatusBar,
@@ -20,14 +21,7 @@ interface Feature {
     color: string;
 }
 
-interface NavigationProp {
-    navigate: (screen: string) => void;
-}
-
-interface HomeScreensProps {
-    navigation?: NavigationProp;
-}
-export default function HomeScreens({ navigation }: HomeScreensProps): React.JSX.Element {
+export default function HomeScreens(): React.JSX.Element {
     const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
 
     const features: Feature[] = [
@@ -52,10 +46,11 @@ export default function HomeScreens({ navigation }: HomeScreensProps): React.JSX
     ];
 
     const handleStart = (): void => {
-        if (navigation) {
-            navigation.navigate('./ListaPacientes');
-        } else {
-            console.log('Comenzar');
+        try {
+            router.push('/(screens)/ListaPacientes');
+        } catch (error) {
+            console.error('Error al navegar:', error);
+            Alert.alert('Error', 'No se pudo navegar a la lista de pacientes');
         }
     };
 
@@ -80,7 +75,6 @@ export default function HomeScreens({ navigation }: HomeScreensProps): React.JSX
                                 throw error;
                             }
 
-                            
                             console.log('Sesión cerrada exitosamente');
                         } catch (error) {
                             console.error('Error al cerrar sesión:', error);
@@ -147,6 +141,8 @@ export default function HomeScreens({ navigation }: HomeScreensProps): React.JSX
                                     <Text style={styles.featureTitle}>{feature.title}</Text>
                                     <Text style={styles.featureDescription}>{feature.description}</Text>
                                 </View>
+
+                                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
                             </View>
                         ))}
                     </View>

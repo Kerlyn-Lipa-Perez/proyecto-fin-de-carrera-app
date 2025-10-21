@@ -18,11 +18,17 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{
           headerShown: false, 
+          animation: 'slide_from_right',
+
         }}>
           <Stack.Screen name='(auth)' />
           <Stack.Screen name='(screens)/HomeScreens' options={{ headerShown: false }} />
 
           <Stack.Screen name='(screens)/OlvidarContrasena' options={{ headerShown: false }} />
+          <Stack.Screen name='(screens)/ListaPacientes' options={{ headerShown: false }} />
+          <Stack.Screen name='(screens)/PacienteDetail' options={{ headerShown: false, presentation: 'card', }} />
+   
+         
           
         </Stack>
         <StatusBar style="auto" />

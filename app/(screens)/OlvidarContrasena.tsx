@@ -46,7 +46,7 @@ export default function ForgotPassword() {
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(
                 data.email,
                 {
-                    redirectTo: 'your-app://reset-password', // Configura tu deep link
+                    redirectTo: '/app/(auth)/signin' // TODO: Cambiar esto por tu URL de redirección real
                 }
             );
 
