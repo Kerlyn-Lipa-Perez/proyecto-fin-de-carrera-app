@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useLocalSearchParams, router } from "expo-router";
+import { useState, useCallback } from "react";
+import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
 import {
     View,
     Text,
@@ -11,27 +11,50 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { _getPaciente } from "@/app/services/paciente";
+import { _getHistoriasByPaciente } from "@/app/services/historia_clinica";
 import { Paciente } from "@/app/interfaces/Paciente";
-import { HistoriaClinica } from "../interfaces/HistoriaClinica";
-
+import { HistoriaClinica } from "@/app/interfaces/HistoriaClinica";
 
 export default function PacienteDetail() {
-    const { id } = useLocalSearchParams<{ id: string }>();
+
+    const params = useLocalSearchParams<{ id: string }>();
+    const id = params.id;
+
     const [paciente, setPaciente] = useState<Paciente | null>(null);
     const [historias, setHistorias] = useState<HistoriaClinica[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingHistorias, setLoadingHistorias] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (id) {
+    useFocusEffect(
+        useCallback(() => {
+            if (!id || id === 'undefined' || id === 'null') {
+          
+                Alert.alert(
+                    'Error',
+                    'ID de paciente no válido',
+                    [{ text: 'OK', onPress: () => router.back() }]
+                );
+                return;
+            }
+            console.log(id)
             fetchData();
-        }
-    }, [id]);
+        }, [id])
+    );
 
     const fetchData = async () => {
+    
+        if (!id || id === 'undefined' || id === 'null') {
+            setError('ID de paciente no válido');
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
             setError(null);
+
+            console.log('🔍 Buscando paciente con ID:', id);
 
             // Obtener datos del paciente
             const pacienteData = await _getPaciente(id);
@@ -40,16 +63,16 @@ export default function PacienteDetail() {
                 throw new Error("Paciente no encontrado");
             }
 
+            console.log('✅ Paciente encontrado:', pacienteData);
             setPaciente(pacienteData);
 
-            // Aquí puedes cargar las historias clínicas si tienes la función
-            // const historiasData = await _getHistoriasClinicasByPaciente(id);
-            // setHistorias(historiasData || []);
+            // Cargar historias clínicas
+            await loadHistorias(id);
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Error al cargar datos';
             setError(errorMessage);
-            console.error("Error al cargar datos:", error);
+            console.error("❌ Error al cargar datos del paciente:", error);
 
             Alert.alert(
                 'Error',
@@ -58,6 +81,25 @@ export default function PacienteDetail() {
             );
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadHistorias = async (pacienteId: string) => {
+        if (!pacienteId || pacienteId === 'undefined' || pacienteId === 'null') {
+            return;
+        }
+
+        try {
+            setLoadingHistorias(true);
+            console.log('📋 Cargando historias para paciente:', pacienteId);
+            const historiasData = await _getHistoriasByPaciente(pacienteId);
+            console.log('✅ Historias cargadas:', historiasData.length);
+            setHistorias(historiasData || []);
+        } catch (error) {
+            console.error("❌ Error al cargar historias clínicas:", error);
+            setHistorias([]);
+        } finally {
+            setLoadingHistorias(false);
         }
     };
 
@@ -88,13 +130,17 @@ export default function PacienteDetail() {
     };
 
     const handleEditPaciente = () => {
-        // Navegar al formulario de edición
+        if (!id) return;
         router.push(`/(screens)/PacienteFormScreen?id=${id}`);
     };
 
     const handleCreateHistoria = () => {
-        // Navegar a crear nueva historia clínica
+        if (!id) return;
         router.push(`/(screens)/HistoriaClinicaForm?pacienteId=${id}`);
+    };
+
+    const handleHistoriaPress = (historiaId: string) => {
+        router.push(`/(screens)/HistoriaClinicaDetail?id=${historiaId}`);
     };
 
     if (loading) {
@@ -240,12 +286,18 @@ export default function PacienteDetail() {
                         </TouchableOpacity>
                     </View>
 
-                    {historias.length > 0 ? (
+                    {loadingHistorias ? (
+                        <View style={styles.loadingHistorias}>
+                            <ActivityIndicator size="small" color="#2563EB" />
+                            <Text style={styles.loadingHistoriasText}>Cargando historias...</Text>
+                        </View>
+                    ) : historias.length > 0 ? (
                         historias.map((historia) => (
                             <TouchableOpacity
                                 key={historia.id_historia}
                                 style={styles.historiaCard}
-                                onPress={() => router.push(`/(screens)/HistoriaClinicaDetail?id=${historia.id_historia}`)}
+                                onPress={() => handleHistoriaPress(historia.id_historia)}
+                                activeOpacity={0.7}
                             >
                                 <View style={styles.historiaHeader}>
                                     <Text style={styles.historiaDate}>
@@ -264,9 +316,17 @@ export default function PacienteDetail() {
                                     </View>
                                 </View>
 
-                                <Text style={styles.historiaTitle}>
-                                    🩺 {historia.diagnostico}
-                                </Text>
+                                {historia.motivo_consulta && (
+                                    <Text style={styles.historiaMotivo}>
+                                        📋 {historia.motivo_consulta}
+                                    </Text>
+                                )}
+
+                                {historia.diagnostico && (
+                                    <Text style={styles.historiaTitle}>
+                                        🩺 {historia.diagnostico}
+                                    </Text>
+                                )}
 
                                 {historia.tratamiento && (
                                     <Text style={styles.historiaText}>
@@ -283,8 +343,11 @@ export default function PacienteDetail() {
                     ) : (
                         <View style={styles.emptyHistoria}>
                             <Ionicons name="document-text-outline" size={48} color="#D1D5DB" />
-                            <Text style={styles.emptyText}>
+                            <Text style={styles.emptyTitle}>
                                 No hay historias clínicas registradas
+                            </Text>
+                            <Text style={styles.emptySubtext}>
+                                Comienza a llevar un registro detallado de las consultas y evolución del paciente
                             </Text>
                             <TouchableOpacity
                                 style={styles.createButton}
@@ -296,6 +359,37 @@ export default function PacienteDetail() {
                         </View>
                     )}
                 </View>
+
+                {/* Estadísticas adicionales si hay historias */}
+                {historias.length > 0 && (
+                    <View style={styles.statsSection}>
+                        <View style={styles.statsCard}>
+                            <View style={styles.statItem}>
+                                <Ionicons name="document-text" size={24} color="#2563EB" />
+                                <Text style={styles.statValue}>{historias.length}</Text>
+                                <Text style={styles.statLabel}>
+                                    {historias.length === 1 ? 'Historia' : 'Historias'}
+                                </Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statItem}>
+                                <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                                <Text style={styles.statValue}>
+                                    {historias.filter(h => h.estado).length}
+                                </Text>
+                                <Text style={styles.statLabel}>Activas</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statItem}>
+                                <Ionicons name="archive" size={24} color="#6B7280" />
+                                <Text style={styles.statValue}>
+                                    {historias.filter(h => !h.estado).length}
+                                </Text>
+                                <Text style={styles.statLabel}>Cerradas</Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
             </ScrollView>
         </View>
     );
@@ -465,6 +559,19 @@ const styles = StyleSheet.create({
         backgroundColor: "#E5E7EB",
         marginVertical: 4,
     },
+    loadingHistorias: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 12,
+    },
+    loadingHistoriasText: {
+        marginLeft: 12,
+        fontSize: 14,
+        color: "#6B7280",
+    },
     historiaCard: {
         backgroundColor: "#FFFFFF",
         borderRadius: 12,
@@ -494,6 +601,12 @@ const styles = StyleSheet.create({
     estadoText: {
         fontSize: 12,
         fontWeight: "600",
+    },
+    historiaMotivo: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#4B5563",
+        marginBottom: 8,
     },
     historiaTitle: {
         fontSize: 16,
@@ -527,12 +640,20 @@ const styles = StyleSheet.create({
         padding: 40,
         alignItems: "center",
     },
-    emptyText: {
-        color: "#6B7280",
-        fontSize: 15,
+    emptyTitle: {
+        color: "#1F2937",
+        fontSize: 16,
+        fontWeight: "600",
         marginTop: 12,
-        marginBottom: 20,
         textAlign: "center",
+    },
+    emptySubtext: {
+        color: "#6B7280",
+        fontSize: 14,
+        marginTop: 8,
+        marginBottom: 24,
+        textAlign: "center",
+        lineHeight: 20,
     },
     createButton: {
         flexDirection: "row",
@@ -547,5 +668,41 @@ const styles = StyleSheet.create({
         color: "#FFFFFF",
         fontSize: 15,
         fontWeight: "600",
+    },
+    statsSection: {
+        paddingHorizontal: 16,
+        marginTop: 8,
+        marginBottom: 24,
+    },
+    statsCard: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 12,
+        padding: 20,
+        flexDirection: "row",
+        justifyContent: "space-around",
+        shadowColor: "#000",
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    statItem: {
+        alignItems: "center",
+        flex: 1,
+    },
+    statValue: {
+        fontSize: 24,
+        fontWeight: "700",
+        color: "#1F2937",
+        marginTop: 8,
+    },
+    statLabel: {
+        fontSize: 13,
+        color: "#6B7280",
+        marginTop: 4,
+    },
+    statDivider: {
+        width: 1,
+        backgroundColor: "#E5E7EB",
+        marginHorizontal: 16,
     },
 });

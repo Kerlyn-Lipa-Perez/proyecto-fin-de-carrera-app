@@ -89,15 +89,19 @@ export default function ListaPacientes() {
     };
 
  
-    const handlePatientPress = (patientId: string) => {
+    const handlePatientPress = (paciente: Paciente) => {
         // Navegar al detalle del paciente
-        router.push(`/(screens)/PacienteDetail?id=${patientId}`);
+        router.push({
+            pathname: '/(screens)/PacienteDetail',
+            params: { id: paciente.id_paciente}
+        });
+        console.log('Paciente seleccionado:', paciente);
     };
 
     const renderPatientItem = ({ item }: { item: Paciente }) => (
         <TouchableOpacity
             style={styles.patientCard}
-            onPress={() => handlePatientPress(item.id)}
+            onPress={() => handlePatientPress(item)}
             activeOpacity={0.7}
         >
             <View style={styles.patientContent}>
@@ -196,7 +200,7 @@ export default function ListaPacientes() {
                 <FlatList
                     data={filteredPatients}
                     renderItem={renderPatientItem}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={(item) => item.id_paciente}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                  

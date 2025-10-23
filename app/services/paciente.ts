@@ -15,15 +15,15 @@ export const _createPaciente = async (paciente: Paciente) => {
 };
 
 export const _getPaciente = async (id : string) => {
-    const {data ,error} = await supabase.from('paciente').select('*').eq('id', id).single();
+    const {data ,error} = await supabase.from('paciente').select('*').eq('id_paciente', id).single();
     console.log("data",data);
     if (error) {
 		throw error;
 	}
 
-	if (data) {
-		return data;
-	}
+	if (error) throw error;
+	
+	return data;
 
 };
 
@@ -48,7 +48,7 @@ export const _updatePaciente = async (paciente: Paciente) => {
      const { data, error } = await supabase
 				.from("paciente")
 				.update(paciente)
-				.eq("id", paciente.id)
+				.eq("id_paciente", paciente.id_paciente)
 				.select();
 
 			if (error) {
@@ -59,7 +59,7 @@ export const _updatePaciente = async (paciente: Paciente) => {
 };
 
 export const _deletePaciente = async (id: string) => {
-     const { error } = await supabase.from("paciente").delete().eq("id", id);
+     const { error } = await supabase.from("paciente").delete().eq("id_paciente", id);
 
 			if (error) {
 				throw error;

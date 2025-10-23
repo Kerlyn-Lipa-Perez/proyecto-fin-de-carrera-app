@@ -7,5 +7,4 @@ export interface HistoriaClinica {
 	observaciones?: string;
 	fecha_registro: string;
 	estado: boolean;
-	created_at: string;
 }
