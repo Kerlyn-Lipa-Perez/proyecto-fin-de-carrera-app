@@ -26,8 +26,8 @@ export default function RootLayout() {
 
           <Stack.Screen name='(screens)/OlvidarContrasena' options={{ headerShown: false }} />
           <Stack.Screen name='(screens)/ListaPacientes' options={{ headerShown: false }} />
-          <Stack.Screen name='(screens)/PacienteDetail' options={{ headerShown: false, presentation: 'card', }} />
-          <Stack.Screen name='(screens)/HistoriaClinicaScreen' options={{ headerShown: false, presentation: 'card', }} />
+          <Stack.Screen name='(screens)/PacienteDetail' options={{ headerShown: false, presentation: 'card' }} />
+          <Stack.Screen name='(screens)/HistoriaClinicaScreen' options={{ headerShown: false, presentation: 'card'}} />
           <Stack.Screen name='(screens)/HistoriaClinicaForm' options={{ headerShown: false}} />
           
         </Stack>

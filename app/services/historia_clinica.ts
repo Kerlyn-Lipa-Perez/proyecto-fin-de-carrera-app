@@ -52,10 +52,18 @@ export const _getHistoriaById = async (
 /**
  * Crea una nueva historia clínica
  */
-export const _createHistoria = async (
-	historia: Omit<HistoriaClinica, "id_historia" | "created_at">
-): Promise<HistoriaClinica> => {
+export const _createHistoria = async (historia: {
+	id_paciente: string;
+	id_usuario: string;
+	diagnostico: string;
+	tratamiento?: string | null;
+	observaciones?: string | null;
+	fecha_registro: string;
+	estado: boolean;
+}): Promise<HistoriaClinica> => {
 	try {
+		console.log("🔹 Datos a insertar:", historia);
+
 		const { data, error } = await supabase
 			.from("historia_clinica")
 			.insert(historia)
@@ -63,12 +71,14 @@ export const _createHistoria = async (
 			.single();
 
 		if (error) {
+			console.error("❌ Error de Supabase:", error);
 			throw error;
 		}
 
+		console.log("✅ Datos insertados exitosamente:", data);
 		return data;
 	} catch (error) {
-		console.error("Error al crear historia clínica:", error);
+		console.error("❌ Error al crear historia clínica:", error);
 		throw error;
 	}
 };

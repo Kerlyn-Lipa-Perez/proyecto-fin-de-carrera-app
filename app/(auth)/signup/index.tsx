@@ -8,7 +8,7 @@ import { ActivityIndicator, SafeAreaView, StyleSheet, Text, TextInput, Touchable
 import { z } from 'zod';
 
 const SignupSchema = z.object({
-    name: z.string().min(6,"El nombre debe tener al menos 6 caracteres"),
+    name: z.string().min(4,"El nombre debe tener al menos 4 caracteres"),
     email: z.string().email("Correo electrónico inválido"),
     password: z.string().min(6,"La contraseña debe tener al menos 6 caracteres")
 
