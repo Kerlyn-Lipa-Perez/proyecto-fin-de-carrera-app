@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller } from 'react-hook-form';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { z } from 'zod';
 import {
     View,
@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from '@hookform/resolvers/zod';
-import { _createPaciente } from "@/app/services/paciente";
+import { _createPaciente, _updatePaciente, _getPaciente } from "@/app/services/paciente";
 import { Paciente } from "@/app/interfaces/Paciente";
 import { supabase } from "@/lib/supabase";
 
@@ -31,7 +31,7 @@ const validarFechaFormato = (fecha: string): boolean => {
     return date.getFullYear() === anio &&
         date.getMonth() === mes - 1 &&
         date.getDate() === dia &&
-        date <= new Date(); // No puede ser fecha futura
+        date <= new Date();
 };
 
 // Esquema de validación con Zod
@@ -64,7 +64,12 @@ const PacienteSchema = z.object({
 type PacienteForm = z.infer<typeof PacienteSchema>;
 
 export default function PacienteFormScreen() {
+    const params = useLocalSearchParams<{ id?: string }>();
+    const pacienteId = params.id;
+    const isEditMode = !!pacienteId;
+
     const [loading, setLoading] = useState<boolean>(false);
+    const [loadingData, setLoadingData] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedSexo, setSelectedSexo] = useState<"M" | "F" | "Otro" | null>(null);
 
@@ -73,6 +78,7 @@ export default function PacienteFormScreen() {
         handleSubmit,
         formState: { errors },
         setValue,
+        reset,
     } = useForm<PacienteForm>({
         resolver: zodResolver(PacienteSchema),
         defaultValues: {
@@ -85,6 +91,51 @@ export default function PacienteFormScreen() {
             correo: "",
         }
     });
+
+    // Cargar datos del paciente si está en modo edición
+    useEffect(() => {
+        if (isEditMode && pacienteId) {
+            loadPacienteData();
+        }
+    }, [pacienteId, isEditMode]);
+
+    const loadPacienteData = async () => {
+        try {
+            setLoadingData(true);
+            console.log('📥 Cargando datos del paciente:', pacienteId);
+
+            const paciente = await _getPaciente(pacienteId!);
+
+            if (paciente) {
+                // Convertir fecha de YYYY-MM-DD a DD/MM/YYYY
+                const fechaISO = paciente.fecha_nacimiento;
+                const [anio, mes, dia] = fechaISO.split('-');
+                const fechaFormateada = `${dia}/${mes}/${anio}`;
+
+                // Establecer valores en el formulario
+                setValue('dni', paciente.dni);
+                setValue('nombre', paciente.nombre);
+                setValue('apellido', paciente.apellido);
+                setValue('fecha_nacimiento', fechaFormateada);
+                setValue('sexo', paciente.sexo as "M" | "F" | "Otro");
+                setValue('telefono', paciente.telefono);
+                setValue('correo', paciente.correo || '');
+
+                setSelectedSexo(paciente.sexo as "M" | "F" | "Otro");
+
+                console.log('✅ Datos cargados correctamente');
+            }
+        } catch (error) {
+            console.error('❌ Error al cargar paciente:', error);
+            Alert.alert(
+                'Error',
+                'No se pudo cargar la información del paciente',
+                [{ text: 'OK', onPress: () => router.back() }]
+            );
+        } finally {
+            setLoadingData(false);
+        }
+    };
 
     // Convertir de DD/MM/YYYY a YYYY-MM-DD (formato ISO para Supabase)
     const convertirFechaAISO = (fecha: string): string => {
@@ -107,40 +158,68 @@ export default function PacienteFormScreen() {
             // Convertir fecha a formato ISO antes de enviar
             const fechaISO = convertirFechaAISO(data.fecha_nacimiento);
 
-            // Preparar datos del paciente
-            const pacienteData: Omit<Paciente, 'id'> = {
-                dni: data.dni.trim(),
-                nombre: data.nombre.trim(),
-                apellido: data.apellido.trim(),
-                fecha_nacimiento: fechaISO, // ✅ Formato YYYY-MM-DD
-                sexo: data.sexo,
-                telefono: data.telefono.trim(),
-                correo: data.correo?.trim(),
-                id_usuario: user.id,
-            };
+            if (isEditMode && pacienteId) {
+                // Modo edición
+                const pacienteData: Paciente = {
+                    id_paciente: pacienteId,
+                    dni: data.dni.trim(),
+                    nombre: data.nombre.trim(),
+                    apellido: data.apellido.trim(),
+                    fecha_nacimiento: fechaISO,
+                    sexo: data.sexo,
+                    telefono: data.telefono.trim(),
+                    correo: data.correo?.trim(),
+                    id_usuario: user.id,
+                };
 
-            // Crear paciente en Supabase
-            await _createPaciente(pacienteData as Paciente);
+                console.log('📝 Actualizando paciente:', pacienteData);
+                await _updatePaciente(pacienteData);
 
-            // Mostrar mensaje de éxito
-            Alert.alert(
-                "¡Éxito!",
-                "Paciente registrado correctamente",
-                [
-                    {
-                        text: "OK",
-                        onPress: () => router.back(),
-                    },
-                ]
-            );
+                Alert.alert(
+                    "¡Éxito!",
+                    "Paciente actualizado correctamente",
+                    [
+                        {
+                            text: "OK",
+                            onPress: () => router.back(),
+                        },
+                    ]
+                );
+            } else {
+                // Modo creación
+                const pacienteData: Omit<Paciente, 'id_paciente'> = {
+                    dni: data.dni.trim(),
+                    nombre: data.nombre.trim(),
+                    apellido: data.apellido.trim(),
+                    fecha_nacimiento: fechaISO,
+                    sexo: data.sexo,
+                    telefono: data.telefono.trim(),
+                    correo: data.correo?.trim(),
+                    id_usuario: user.id,
+                };
+
+                console.log('📝 Creando paciente:', pacienteData);
+                await _createPaciente(pacienteData as Paciente);
+
+                Alert.alert(
+                    "¡Éxito!",
+                    "Paciente registrado correctamente",
+                    [
+                        {
+                            text: "OK",
+                            onPress: () => router.back(),
+                        },
+                    ]
+                );
+            }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error al crear paciente';
+            const errorMessage = error instanceof Error ? error.message : 'Error al guardar paciente';
             setError(errorMessage);
-            console.error('Error al crear paciente:', error);
+            console.error('❌ Error al guardar paciente:', error);
 
             Alert.alert(
                 'Error',
-                'No se pudo registrar el paciente. Por favor intenta de nuevo.',
+                `No se pudo ${isEditMode ? 'actualizar' : 'registrar'} el paciente. Por favor intenta de nuevo.`,
                 [{ text: 'OK' }]
             );
         } finally {
@@ -155,13 +234,9 @@ export default function PacienteFormScreen() {
 
     // Formatear entrada de fecha automáticamente a DD/MM/YYYY
     const formatDateInput = (text: string): string => {
-        // Remover caracteres no numéricos
         const cleaned = text.replace(/\D/g, '');
-
-        // Limitar a 8 dígitos (DDMMYYYY)
         const limited = cleaned.slice(0, 8);
 
-        // Aplicar formato DD/MM/YYYY automáticamente
         let formatted = limited;
 
         if (limited.length >= 2) {
@@ -178,6 +253,15 @@ export default function PacienteFormScreen() {
 
         return formatted;
     };
+
+    if (loadingData) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#2563EB" />
+                <Text style={styles.loadingText}>Cargando datos del paciente...</Text>
+            </View>
+        );
+    }
 
     return (
         <KeyboardAvoidingView
@@ -198,9 +282,21 @@ export default function PacienteFormScreen() {
                         >
                             <Ionicons name="arrow-back" size={24} color="#1F2937" />
                         </TouchableOpacity>
-                        <Text style={styles.title}>Nuevo Paciente</Text>
+                        <Text style={styles.title}>
+                            {isEditMode ? 'Editar Paciente' : 'Nuevo Paciente'}
+                        </Text>
                         <View style={styles.placeholder} />
                     </View>
+
+                    {/* Info Badge */}
+                    {isEditMode && (
+                        <View style={styles.infoBox}>
+                            <Ionicons name="information-circle" size={20} color="#2563EB" />
+                            <Text style={styles.infoText}>
+                                Estás editando los datos del paciente
+                            </Text>
+                        </View>
+                    )}
 
                     {/* Campo DNI */}
                     <View style={styles.fieldContainer}>
@@ -302,7 +398,7 @@ export default function PacienteFormScreen() {
                         )}
                     </View>
 
-                    {/* Campo Fecha de Nacimiento - CORREGIDO */}
+                    {/* Campo Fecha de Nacimiento */}
                     <View style={styles.fieldContainer}>
                         <Text style={styles.label}>Fecha de Nacimiento *</Text>
                         <Controller
@@ -486,24 +582,45 @@ export default function PacienteFormScreen() {
                     </View>
 
                     {/* Error general */}
-                    {error && <Text style={styles.errorText}>{error}</Text>}
+                    {error && (
+                        <View style={styles.errorBanner}>
+                            <Text style={styles.errorText}>{error}</Text>
+                        </View>
+                    )}
 
-                    {/* Botón de guardar */}
-                    <TouchableOpacity
-                        style={[styles.button, loading && styles.buttonDisabled]}
-                        onPress={handleSubmit(onSubmit)}
-                        disabled={loading}
-                        activeOpacity={0.8}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <>
-                                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-                                <Text style={styles.buttonText}>Guardar Paciente</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
+                    {/* Botones de acción */}
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => router.back()}
+                            disabled={loading}
+                        >
+                            <Text style={styles.cancelButtonText}>Cancelar</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.button, loading && styles.buttonDisabled]}
+                            onPress={handleSubmit(onSubmit)}
+                            disabled={loading}
+                            activeOpacity={0.8}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <>
+                                    <Ionicons
+                                        name={isEditMode ? "save" : "checkmark-circle"}
+                                        size={20}
+                                        color="#FFFFFF"
+                                        style={styles.buttonIcon}
+                                    />
+                                    <Text style={styles.buttonText}>
+                                        {isEditMode ? 'Actualizar Paciente' : 'Guardar Paciente'}
+                                    </Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -514,6 +631,17 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: "#F3F4F6",
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: "#F3F4F6",
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 16,
+        color: "#6B7280",
     },
     scrollContent: {
         flexGrow: 1,
@@ -527,7 +655,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 32,
+        marginBottom: 24,
         marginTop: 40,
     },
     backButton: {
@@ -545,6 +673,21 @@ const styles = StyleSheet.create({
     },
     placeholder: {
         width: 40,
+    },
+    infoBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#EFF6FF",
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 24,
+        gap: 12,
+    },
+    infoText: {
+        flex: 1,
+        fontSize: 14,
+        color: "#1E40AF",
+        lineHeight: 20,
     },
     fieldContainer: {
         marginBottom: 20,
@@ -617,13 +760,39 @@ const styles = StyleSheet.create({
         marginTop: 6,
         marginLeft: 4,
     },
+    errorBanner: {
+        backgroundColor: "#FEE2E2",
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+    },
+    buttonContainer: {
+        flexDirection: "row",
+        gap: 12,
+        marginTop: 8,
+    },
+    cancelButton: {
+        flex: 1,
+        backgroundColor: "#FFFFFF",
+        borderWidth: 2,
+        borderColor: "#E5E7EB",
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    cancelButtonText: {
+        color: "#6B7280",
+        fontSize: 16,
+        fontWeight: "600",
+    },
     button: {
+        flex: 1,
         backgroundColor: "#2563EB",
         paddingVertical: 16,
         borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
-        marginTop: 24,
         flexDirection: "row",
         shadowColor: "#2563EB",
         shadowOffset: {

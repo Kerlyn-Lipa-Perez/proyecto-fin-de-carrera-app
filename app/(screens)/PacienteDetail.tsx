@@ -139,9 +139,9 @@ export default function PacienteDetail() {
         router.push(`/(screens)/HistoriaClinicaForm?pacienteId=${id}`);
     };
 
-    const handleHistoriaPress = (historiaId: string) => {
-        router.push(`/(screens)/HistoriaClinicaDetail?id=${historiaId}`);
-    };
+    //const handleHistoriaPress = (historiaId: string) => {
+    //    router.push(`/(screens)/HistoriaClinicaDetail?id=${historiaId}`);
+    //};
 
     if (loading) {
         return (
@@ -293,11 +293,10 @@ export default function PacienteDetail() {
                         </View>
                     ) : historias.length > 0 ? (
                         historias.map((historia) => (
-                            <TouchableOpacity
+                            <View
                                 key={historia.id_historia}
                                 style={styles.historiaCard}
-                                onPress={() => handleHistoriaPress(historia.id_historia)}
-                                activeOpacity={0.7}
+                 
                             >
                                 <View style={styles.historiaHeader}>
                                     <Text style={styles.historiaDate}>
@@ -316,11 +315,11 @@ export default function PacienteDetail() {
                                     </View>
                                 </View>
 
-                                {historia.motivo_consulta && (
+                                {/*{historia.motivo_consulta && (
                                     <Text style={styles.historiaMotivo}>
                                         📋 {historia.motivo_consulta}
                                     </Text>
-                                )}
+                                )}*/}
 
                                 {historia.diagnostico && (
                                     <Text style={styles.historiaTitle}>
@@ -334,11 +333,19 @@ export default function PacienteDetail() {
                                     </Text>
                                 )}
 
-                                <View style={styles.historiaFooter}>
+                                
+
+                                {historia.observaciones && (
+                                    <Text style={styles.historiaText}>
+                                        📝 {historia.observaciones}
+                                    </Text>
+                                )}
+
+                                {/*<View style={styles.historiaFooter}>
                                     <Text style={styles.viewMore}>Ver detalles</Text>
                                     <Ionicons name="chevron-forward" size={16} color="#2563EB" />
-                                </View>
-                            </TouchableOpacity>
+                                </View>*/}
+                            </View>
                         ))
                     ) : (
                         <View style={styles.emptyHistoria}>
@@ -617,7 +624,7 @@ const styles = StyleSheet.create({
     historiaText: {
         fontSize: 14,
         color: "#6B7280",
-        marginBottom: 4,
+        marginBottom: 5,
     },
     historiaFooter: {
         flexDirection: "row",
