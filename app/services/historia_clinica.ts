@@ -20,7 +20,7 @@ export const _getHistoriasByPaciente = async (
 
 		return data || [];
 	} catch (error) {
-		console.error("Error al obtener historias clínicas:", error);
+
 		throw error;
 	}
 };
@@ -32,6 +32,8 @@ export const _getHistoriaById = async (
 	id_historia: string
 ): Promise<HistoriaClinica | null> => {
 	try {
+		console.log("🔍 Buscando historia con ID:", id_historia);
+
 		const { data, error } = await supabase
 			.from("historia_clinica")
 			.select("*")
@@ -39,12 +41,14 @@ export const _getHistoriaById = async (
 			.single();
 
 		if (error) {
+		
 			throw error;
 		}
 
+		console.log("✅ Historia encontrada:", data);
 		return data;
 	} catch (error) {
-		console.error("Error al obtener historia clínica:", error);
+
 		throw error;
 	}
 };
@@ -71,41 +75,104 @@ export const _createHistoria = async (historia: {
 			.single();
 
 		if (error) {
-			console.error("❌ Error de Supabase:", error);
+
 			throw error;
 		}
 
-		console.log("✅ Datos insertados exitosamente:", data);
+
 		return data;
 	} catch (error) {
-		console.error("❌ Error al crear historia clínica:", error);
+
 		throw error;
 	}
 };
 
 /**
  * Actualiza una historia clínica existente
+ * Basado en la estructura de la tabla:
+ * - id_historia (uuid, PK)
+ * - id_paciente (uuid, FK)
+ * - id_usuario (uuid, FK)
+ * - diagnostico (text)
+ * - tratamiento (text, nullable)
+ * - observaciones (text, nullable)
+ * - fecha_registro (date)
+ * - estado (bool)
+ * - created_at (timestamptz)
+ * - updated_at (timestamptz)
  */
-export const _updateHistoria = async (
-	historia: Partial<HistoriaClinica> & { id_historia: string }
-): Promise<HistoriaClinica> => {
+export const _updateHistoria = async (historia: {
+	id_historia: string;
+	diagnostico?: string;
+	tratamiento?: string | null;
+	observaciones?: string | null;
+	estado?: boolean;
+}): Promise<HistoriaClinica> => {
 	try {
 		const { id_historia, ...updateData } = historia;
 
-		const { data, error } = await supabase
+		
+		// PASO 1: Verificar que la historia existe
+
+		const { data: existingData, error: checkError } = await supabase
 			.from("historia_clinica")
-			.update(updateData)
+			.select("*")
 			.eq("id_historia", id_historia)
-			.select()
 			.single();
 
-		if (error) {
-			throw error;
+		if (checkError) {
+		
+			throw new Error(
+				`No se pudo verificar la historia: ${checkError.message}`
+			);
 		}
 
-		return data;
+		if (!existingData) {
+			
+			throw new Error(`Historia clínica no encontrada con ID: ${id_historia}`);
+		}
+
+		console.log("✅ Historia encontrada:", existingData);
+
+		// PASO 2: Realizar el UPDATE
+		console.log("📍 PASO 2: Realizando UPDATE...");
+		const { error: updateError } = await supabase
+			.from("historia_clinica")
+			.update(updateData)
+			.eq("id_historia", id_historia);
+
+		if (updateError) {
+	
+			throw new Error(`Error al actualizar: ${updateError.message}`);
+		}
+
+		console.log("✅ UPDATE ejecutado sin errores");
+
+		// PASO 3: Obtener los datos actualizados
+		
+		const { data: updatedData, error: fetchError } = await supabase
+			.from("historia_clinica")
+			.select("*")
+			.eq("id_historia", id_historia)
+			.single();
+
+		if (fetchError) {
+			
+			throw new Error(
+				`Error al obtener datos actualizados: ${fetchError.message}`
+			);
+		}
+
+		if (!updatedData) {
+			
+			throw new Error("No se pudo obtener la historia clínica actualizada");
+		}
+
+
+
+		return updatedData;
 	} catch (error) {
-		console.error("Error al actualizar historia clínica:", error);
+
 		throw error;
 	}
 };

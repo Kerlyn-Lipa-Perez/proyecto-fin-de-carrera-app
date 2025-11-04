@@ -29,7 +29,7 @@ export default function PacienteDetail() {
     useFocusEffect(
         useCallback(() => {
             if (!id || id === 'undefined' || id === 'null') {
-          
+
                 Alert.alert(
                     'Error',
                     'ID de paciente no válido',
@@ -43,7 +43,7 @@ export default function PacienteDetail() {
     );
 
     const fetchData = async () => {
-    
+
         if (!id || id === 'undefined' || id === 'null') {
             setError('ID de paciente no válido');
             setLoading(false);
@@ -139,9 +139,34 @@ export default function PacienteDetail() {
         router.push(`/(screens)/HistoriaClinicaForm?pacienteId=${id}`);
     };
 
-    //const handleHistoriaPress = (historiaId: string) => {
-    //    router.push(`/(screens)/HistoriaClinicaDetail?id=${historiaId}`);
-    //};
+    const handleHistoriaPress = (historia: HistoriaClinica) => {
+        if (!historia.estado) {
+            Alert.alert(
+                'Historia cerrada',
+                'Esta historia clínica está cerrada y no puede ser editada. ¿Deseas verla de todos modos?',
+                [
+                    {
+                        text: 'Cancelar',
+                        style: 'cancel'
+                    },
+                    {
+                        text: 'Ver',
+                        onPress: () => {
+                            router.push({
+                                pathname: '/(screens)/HistoriaClinicaForm',
+                                params: { historiaId: historia.id_historia }
+                            });
+                        }
+                    }
+                ]
+            );
+        } else {
+            router.push({
+                pathname: '/(screens)/HistoriaClinicaForm',
+                params: { historiaId: historia.id_historia }
+            });
+        }
+    };
 
     if (loading) {
         return (
@@ -293,15 +318,24 @@ export default function PacienteDetail() {
                         </View>
                     ) : historias.length > 0 ? (
                         historias.map((historia) => (
-                            <View
+                            <TouchableOpacity
                                 key={historia.id_historia}
                                 style={styles.historiaCard}
-                 
+                                onPress={() => handleHistoriaPress(historia)}
+                                activeOpacity={0.7}
                             >
                                 <View style={styles.historiaHeader}>
-                                    <Text style={styles.historiaDate}>
-                                        {formatDate(historia.fecha_registro)}
-                                    </Text>
+                                    <View style={styles.historiaDateContainer}>
+                                        <Ionicons
+                                            name="calendar-outline"
+                                            size={16}
+                                            color="#6B7280"
+                                            style={{ marginRight: 6 }}
+                                        />
+                                        <Text style={styles.historiaDate}>
+                                            {formatDate(historia.fecha_registro)}
+                                        </Text>
+                                    </View>
                                     <View style={[
                                         styles.estadoBadge,
                                         { backgroundColor: historia.estado ? "#DEF7EC" : "#F3F4F6" }
@@ -315,37 +349,47 @@ export default function PacienteDetail() {
                                     </View>
                                 </View>
 
-                                {/*{historia.motivo_consulta && (
-                                    <Text style={styles.historiaMotivo}>
-                                        📋 {historia.motivo_consulta}
-                                    </Text>
-                                )}*/}
-
                                 {historia.diagnostico && (
-                                    <Text style={styles.historiaTitle}>
-                                        🩺 {historia.diagnostico}
-                                    </Text>
+                                    <View style={styles.historiaContentRow}>
+                                        <Ionicons name="medical" size={16} color="#2563EB" />
+                                        <Text style={styles.historiaTitle} numberOfLines={2}>
+                                            {historia.diagnostico}
+                                        </Text>
+                                    </View>
                                 )}
 
                                 {historia.tratamiento && (
-                                    <Text style={styles.historiaText}>
-                                        💊 {historia.tratamiento}
-                                    </Text>
+                                    <View style={styles.historiaContentRow}>
+                                        <Ionicons name="fitness" size={16} color="#059669" />
+                                        <Text style={styles.historiaText} numberOfLines={2}>
+                                            {historia.tratamiento}
+                                        </Text>
+                                    </View>
                                 )}
-
-                                
 
                                 {historia.observaciones && (
-                                    <Text style={styles.historiaText}>
-                                        📝 {historia.observaciones}
-                                    </Text>
+                                    <View style={styles.historiaContentRow}>
+                                        <Ionicons name="document-text" size={16} color="#6B7280" />
+                                        <Text style={styles.historiaText} numberOfLines={2}>
+                                            {historia.observaciones}
+                                        </Text>
+                                    </View>
                                 )}
 
-                                {/*<View style={styles.historiaFooter}>
-                                    <Text style={styles.viewMore}>Ver detalles</Text>
+                                <View style={styles.historiaFooter}>
+                                    <View style={styles.historiaFooterLeft}>
+                                        <Ionicons
+                                            name={historia.estado ? "create-outline" : "eye-outline"}
+                                            size={14}
+                                            color="#2563EB"
+                                        />
+                                        <Text style={styles.viewMore}>
+                                            {historia.estado ? 'Editar' : 'Ver'}
+                                        </Text>
+                                    </View>
                                     <Ionicons name="chevron-forward" size={16} color="#2563EB" />
-                                </View>*/}
-                            </View>
+                                </View>
+                            </TouchableOpacity>
                         ))
                     ) : (
                         <View style={styles.emptyHistoria}>
@@ -595,6 +639,10 @@ const styles = StyleSheet.create({
         alignItems: "center",
         marginBottom: 12,
     },
+    historiaDateContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
     historiaDate: {
         fontSize: 13,
         fontWeight: "600",
@@ -609,37 +657,43 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: "600",
     },
-    historiaMotivo: {
-        fontSize: 15,
-        fontWeight: "600",
-        color: "#4B5563",
+    historiaContentRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
         marginBottom: 8,
+        gap: 8,
     },
     historiaTitle: {
-        fontSize: 16,
+        flex: 1,
+        fontSize: 15,
         fontWeight: "600",
         color: "#1F2937",
-        marginBottom: 8,
+        lineHeight: 20,
     },
     historiaText: {
+        flex: 1,
         fontSize: 14,
         color: "#6B7280",
-        marginBottom: 5,
+        lineHeight: 18,
     },
     historiaFooter: {
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "flex-end",
+        justifyContent: "space-between",
         marginTop: 8,
-        paddingTop: 8,
+        paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: "#F3F4F6",
+    },
+    historiaFooterLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
     },
     viewMore: {
         fontSize: 14,
         fontWeight: "600",
         color: "#2563EB",
-        marginRight: 4,
     },
     emptyHistoria: {
         backgroundColor: "#FFFFFF",

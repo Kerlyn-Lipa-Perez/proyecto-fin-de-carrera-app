@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller } from 'react-hook-form';
 import { router, useLocalSearchParams } from 'expo-router';
 import { z } from 'zod';
@@ -18,12 +18,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from "@/lib/supabase";
-import { _createHistoria } from "@/app/services/historia_clinica";
+import { _createHistoria, _updateHistoria, _getHistoriaById } from "@/app/services/historia_clinica";
 
 
 const HistoriaClinicaSchema = z.object({
     diagnostico: z.string()
-        .min(5, "El diagnóstico debe tener al menos 10 caracteres")
+        .min(5, "El diagnóstico debe tener al menos 5 caracteres")
         .max(500, "El diagnóstico es demasiado largo"),
     tratamiento: z.string()
         .max(1000, "El tratamiento es demasiado largo")
@@ -39,17 +39,22 @@ const HistoriaClinicaSchema = z.object({
 type HistoriaClinicaForm = z.infer<typeof HistoriaClinicaSchema>;
 
 export default function HistoriaClinicaFormScreen() {
-    const params = useLocalSearchParams<{ pacienteId: string }>();
+    const params = useLocalSearchParams<{ pacienteId?: string; historiaId?: string }>();
     const pacienteId = params.pacienteId;
+    const historiaId = params.historiaId;
+    const isEditMode = !!historiaId;
 
     const [loading, setLoading] = useState<boolean>(false);
+    const [loadingData, setLoadingData] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [initialEstado, setInitialEstado] = useState<boolean>(true);
 
     const {
         control,
         handleSubmit,
         formState: { errors },
         watch,
+        setValue,
     } = useForm<HistoriaClinicaForm>({
         resolver: zodResolver(HistoriaClinicaSchema),
         defaultValues: {
@@ -62,8 +67,44 @@ export default function HistoriaClinicaFormScreen() {
 
     const estadoValue = watch("estado");
 
+    // Cargar datos de la historia si está en modo edición
+    useEffect(() => {
+        if (isEditMode && historiaId) {
+            loadHistoriaData();
+        }
+    }, [historiaId, isEditMode]);
+
+    const loadHistoriaData = async () => {
+        try {
+            setLoadingData(true);
+            console.log('📥 Cargando datos de la historia:', historiaId);
+
+            const historia = await _getHistoriaById(historiaId!);
+
+            if (historia) {
+                setValue('diagnostico', historia.diagnostico);
+                setValue('tratamiento', historia.tratamiento || '');
+                setValue('observaciones', historia.observaciones || '');
+                setValue('estado', historia.estado);
+                setInitialEstado(historia.estado);
+
+                console.log('✅ Datos de historia cargados correctamente');
+            }
+        } catch (error) {
+            console.error('❌ Error al cargar historia:', error);
+            Alert.alert(
+                'Error',
+                'No se pudo cargar la información de la historia clínica',
+                [{ text: 'OK', onPress: () => router.back() }]
+            );
+        } finally {
+            setLoadingData(false);
+        }
+    };
+
     const onSubmit = async (data: HistoriaClinicaForm): Promise<void> => {
-        if (!pacienteId || pacienteId === 'undefined' || pacienteId === 'null') {
+        // Validar que en modo creación tengamos pacienteId
+        if (!isEditMode && (!pacienteId || pacienteId === 'undefined' || pacienteId === 'null')) {
             Alert.alert('Error', 'ID de paciente no válido');
             return;
         }
@@ -79,43 +120,66 @@ export default function HistoriaClinicaFormScreen() {
                 throw new Error("Usuario no autenticado");
             }
 
-            // Preparar datos de la historia clínica
-            const historiaData = {
-                id_paciente: pacienteId,
-                id_usuario: user.id,
-                diagnostico: data.diagnostico.trim(),
-                tratamiento: data.tratamiento?.trim() || null,
-                observaciones: data.observaciones?.trim() || null,
-                fecha_registro: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-                estado: data.estado,
-            };
+            if (isEditMode && historiaId) {
+                // Modo edición
+                const historiaData = {
+                    id_historia: historiaId,
+                    diagnostico: data.diagnostico.trim(),
+                    tratamiento: data.tratamiento?.trim() || null,
+                    observaciones: data.observaciones?.trim() || null,
+                    estado: data.estado,
+                };
 
-            console.log('📝 Creando historia clínica:', historiaData);
+                console.log('📝 Actualizando historia clínica con ID:', historiaId);
+                console.log('📝 Datos a actualizar:', historiaData);
 
-            // Usar la función del servicio
-            const nuevaHistoria = await _createHistoria(historiaData);
+                const resultado = await _updateHistoria(historiaData);
+                console.log('✅ Historia actualizada:', resultado);
 
-            console.log('✅ Historia clínica creada:', nuevaHistoria);
+                Alert.alert(
+                    "¡Éxito!",
+                    "Historia clínica actualizada correctamente",
+                    [
+                        {
+                            text: "OK",
+                            onPress: () => router.back(),
+                        },
+                    ]
+                );
+            } else {
+                // Modo creación
+                const historiaData = {
+                    id_paciente: pacienteId!,
+                    id_usuario: user.id,
+                    diagnostico: data.diagnostico.trim(),
+                    tratamiento: data.tratamiento?.trim() || null,
+                    observaciones: data.observaciones?.trim() || null,
+                    fecha_registro: new Date().toISOString().split('T')[0],
+                    estado: data.estado,
+                };
 
-            // Mostrar mensaje de éxito
-            Alert.alert(
-                "¡Éxito!",
-                "Historia clínica registrada correctamente",
-                [
-                    {
-                        text: "OK",
-                        onPress: () => router.back(),
-                    },
-                ]
-            );
+                console.log('📝 Creando historia clínica:', historiaData);
+                await _createHistoria(historiaData);
+
+                Alert.alert(
+                    "¡Éxito!",
+                    "Historia clínica registrada correctamente",
+                    [
+                        {
+                            text: "OK",
+                            onPress: () => router.back(),
+                        },
+                    ]
+                );
+            }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error al crear historia clínica';
+            const errorMessage = error instanceof Error ? error.message : 'Error al guardar historia clínica';
             setError(errorMessage);
-            console.error('❌ Error al crear historia clínica:', error);
+            console.error('❌ Error al guardar historia clínica:', error);
 
             Alert.alert(
                 'Error',
-                'No se pudo registrar la historia clínica. Por favor intenta de nuevo.',
+                `No se pudo ${isEditMode ? 'actualizar' : 'registrar'} la historia clínica. Por favor intenta de nuevo.`,
                 [{ text: 'OK' }]
             );
         } finally {
@@ -123,7 +187,24 @@ export default function HistoriaClinicaFormScreen() {
         }
     };
 
-    if (!pacienteId) {
+    // Validar si estamos en modo edición pero sin IDs válidos
+    if (isEditMode && (!historiaId || historiaId === 'undefined' || historiaId === 'null')) {
+        return (
+            <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+                <Text style={styles.errorMessage}>ID de historia clínica no válido</Text>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => router.back()}
+                >
+                    <Text style={styles.backButtonText}>Volver</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    // Validar si estamos en modo creación pero sin pacienteId
+    if (!isEditMode && (!pacienteId || pacienteId === 'undefined' || pacienteId === 'null')) {
         return (
             <View style={styles.errorContainer}>
                 <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
@@ -134,6 +215,15 @@ export default function HistoriaClinicaFormScreen() {
                 >
                     <Text style={styles.backButtonText}>Volver</Text>
                 </TouchableOpacity>
+            </View>
+        );
+    }
+
+    if (loadingData) {
+        return (
+            <View style={styles.errorContainer}>
+                <ActivityIndicator size="large" color="#2563EB" />
+                <Text style={styles.loadingText}>Cargando historia clínica...</Text>
             </View>
         );
     }
@@ -157,7 +247,9 @@ export default function HistoriaClinicaFormScreen() {
                         >
                             <Ionicons name="arrow-back" size={24} color="#1F2937" />
                         </TouchableOpacity>
-                        <Text style={styles.title}>Nueva Historia Clínica</Text>
+                        <Text style={styles.title}>
+                            {isEditMode ? 'Editar Historia Clínica' : 'Nueva Historia Clínica'}
+                        </Text>
                         <View style={styles.placeholder} />
                     </View>
 
@@ -165,9 +257,22 @@ export default function HistoriaClinicaFormScreen() {
                     <View style={styles.infoBox}>
                         <Ionicons name="information-circle" size={20} color="#2563EB" />
                         <Text style={styles.infoText}>
-                            Completa los datos de la historia clínica del paciente
+                            {isEditMode
+                                ? 'Modifica los datos de la historia clínica del paciente'
+                                : 'Completa los datos de la historia clínica del paciente'
+                            }
                         </Text>
                     </View>
+
+                    {/* Advertencia si la historia está cerrada */}
+                    {isEditMode && !initialEstado && (
+                        <View style={styles.warningBox}>
+                            <Ionicons name="warning" size={20} color="#F59E0B" />
+                            <Text style={styles.warningText}>
+                                Esta historia clínica está cerrada. Para poder editarla, primero debes activarla.
+                            </Text>
+                        </View>
+                    )}
 
                     {/* Campo Diagnóstico */}
                     <View style={styles.fieldContainer}>
@@ -189,6 +294,7 @@ export default function HistoriaClinicaFormScreen() {
                                         multiline
                                         numberOfLines={4}
                                         textAlignVertical="top"
+                                        editable={!isEditMode || initialEstado}
                                     />
                                 </View>
                             )}
@@ -221,6 +327,7 @@ export default function HistoriaClinicaFormScreen() {
                                         multiline
                                         numberOfLines={4}
                                         textAlignVertical="top"
+                                        editable={!isEditMode || initialEstado}
                                     />
                                 </View>
                             )}
@@ -250,6 +357,7 @@ export default function HistoriaClinicaFormScreen() {
                                         multiline
                                         numberOfLines={3}
                                         textAlignVertical="top"
+                                        editable={!isEditMode || initialEstado}
                                     />
                                 </View>
                             )}
@@ -312,17 +420,27 @@ export default function HistoriaClinicaFormScreen() {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.submitButton, loading && styles.buttonDisabled]}
+                            style={[
+                                styles.submitButton,
+                                (loading || (isEditMode && !initialEstado && !estadoValue)) && styles.buttonDisabled
+                            ]}
                             onPress={handleSubmit(onSubmit)}
-                            disabled={loading}
+                            disabled={loading || (isEditMode && !initialEstado && !estadoValue)}
                             activeOpacity={0.8}
                         >
                             {loading ? (
                                 <ActivityIndicator color="#fff" />
                             ) : (
                                 <>
-                                    <Ionicons name="save" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-                                    <Text style={styles.submitButtonText}>Guardar Historia</Text>
+                                    <Ionicons
+                                        name={isEditMode ? "save" : "save"}
+                                        size={20}
+                                        color="#FFFFFF"
+                                        style={styles.buttonIcon}
+                                    />
+                                    <Text style={styles.submitButtonText}>
+                                        {isEditMode ? 'Actualizar Historia' : 'Guardar Historia'}
+                                    </Text>
                                 </>
                             )}
                         </TouchableOpacity>
@@ -382,6 +500,21 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 14,
         color: "#1E40AF",
+        lineHeight: 20,
+    },
+    warningBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#FEF3C7",
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 24,
+        gap: 12,
+    },
+    warningText: {
+        flex: 1,
+        fontSize: 14,
+        color: "#92400E",
         lineHeight: 20,
     },
     fieldContainer: {
@@ -463,6 +596,12 @@ const styles = StyleSheet.create({
         color: "#EF4444",
         marginTop: 16,
         marginBottom: 24,
+        textAlign: "center",
+    },
+    loadingText: {
+        fontSize: 16,
+        color: "#6B7280",
+        marginTop: 16,
         textAlign: "center",
     },
     backButton: {
